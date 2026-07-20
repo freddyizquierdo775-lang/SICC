@@ -1,0 +1,6 @@
+{
+  "name": "Bancore Platform",
+  "description": "Plataforma avanzada de intercambio y finanzas con módulo BaaS (Banking-as-a-Service) para gestión de clientes VIP, billeteras digitales y tarjetas Mastercard.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
