@@ -1,6 +1,7 @@
 import Database from "better-sqlite3";
 import path from "path";
 import fs from "fs";
+import { createHash } from "crypto";
 
 let db: any;
 const dbPath = "baas_platform.db";
@@ -466,8 +467,7 @@ function runMigrationsAndSetup() {
 
   // Set default password for existing mock users (password: "123456")
   try {
-    const crypto = require('crypto');
-    const defaultHash = crypto.createHash('sha256').update('123456').digest('hex');
+    const defaultHash = createHash('sha256').update('123456').digest('hex');
     db.prepare("UPDATE User_Profiles SET password_hash = ? WHERE password_hash IS NULL").run(defaultHash);
   } catch (e) {
     // skip if crypto fails

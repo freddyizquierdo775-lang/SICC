@@ -4,6 +4,7 @@ import dotenv from "dotenv";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
+import { createHash } from "crypto";
 import clearingRoutes from "./src/microservices/clearing-house/routes/clearing.ts";
 import db from "./src/db/database.ts";
 
@@ -575,8 +576,7 @@ async function startServer() {
       return res.status(400).json({ status: "error", message: "Usuario y contraseña requeridos." });
     }
     try {
-      const crypto = require('crypto');
-      const hash = crypto.createHash('sha256').update(password).digest('hex');
+      const hash = createHash('sha256').update(password).digest('hex');
       
       const profile = db.prepare(
         'SELECT * FROM User_Profiles WHERE auth_user_id = ? AND password_hash = ? AND is_active = 1'
@@ -1695,8 +1695,7 @@ async function startServer() {
 
       // Insert operator into User_Profiles with auto-generated password
       const tempPassword = curp.substring(0, 4).toUpperCase() + '2026';
-      const crypto = require('crypto');
-      const passwordHash = crypto.createHash('sha256').update(tempPassword).digest('hex');
+      const passwordHash = createHash('sha256').update(tempPassword).digest('hex');
 
       db.prepare(`
         INSERT INTO User_Profiles (auth_user_id, nickname, puesto, branch_id, hire_date, role_level, custom_permissions, password_hash)
