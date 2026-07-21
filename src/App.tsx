@@ -18,6 +18,7 @@ import Compliance from "./pages/Compliance";
 import PublicCapture from "./pages/PublicCapture";
 import { AuthProvider } from "./contexts/AuthContext";
 import { AuthGuard } from "./components/AuthGuard";
+import ShiftGate from "./components/ShiftGate";
 import { RoleLevel } from "./types/auth";
 
 export default function App() {
@@ -32,8 +33,9 @@ export default function App() {
 
   return (
     <AuthProvider>
-      <DashboardLayout activeTab={activeTab} setActiveTab={setActiveTab}>
-        {activeTab === "dashboard" && <Dashboard />}
+      <ShiftGate>
+        <DashboardLayout activeTab={activeTab} setActiveTab={setActiveTab}>
+          {activeTab === "dashboard" && <Dashboard />}
         
         {activeTab === "baas" && (
           <AuthGuard minLevel={RoleLevel.CAJERO_PRINCIPAL}>
@@ -89,6 +91,7 @@ export default function App() {
           </AuthGuard>
         )}
       </DashboardLayout>
+      </ShiftGate>
     </AuthProvider>
   );
 }

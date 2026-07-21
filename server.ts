@@ -1710,6 +1710,10 @@ async function startServer() {
         passwordHash
       );
 
+      // Create cajas entry for the new cashier (initial balance = 0)
+      db.prepare('INSERT OR IGNORE INTO cajas (cajero_id, saldo_actual_mxn, sucursal_id) VALUES (?, 0, ?)')
+        .run(authUserId, fileRecord.sucursal || "MAIN_BRANCH");
+
       // Update HR Vault record to set finalized status
       db.prepare('UPDATE hr_vault_metadata SET is_finalized = 1 WHERE curp = ?').run(curp.toUpperCase());
 
