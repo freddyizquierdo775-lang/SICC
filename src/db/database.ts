@@ -466,11 +466,11 @@ function runMigrationsAndSetup() {
   }
 
   // Set default password for existing mock users (password: "123456")
+  const defaultHash = createHash('sha256').update('123456').digest('hex');
   try {
-    const defaultHash = createHash('sha256').update('123456').digest('hex');
     db.prepare("UPDATE User_Profiles SET password_hash = ? WHERE password_hash IS NULL").run(defaultHash);
   } catch (e) {
-    // skip if crypto fails
+    // skip if update fails
   }
 
   // Migration: Add es_matriz column if it doesn't exist

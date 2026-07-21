@@ -9,33 +9,44 @@ import { RefreshCw } from "lucide-react";
  * 
  * After authentication, if the user is a cashier (role_level ≤ 3),
  * this gate checks if there's an active shift. If not, it blocks
- * access to the dashboard and forces the shift opening flow:
- * 
- *   1. Blind count of physical denominations
- *   2. Validation against inherited balance
- *   3. Deviation protocol (if mismatch) with manager authorization
- *   4. Once shift is OPEN → access granted to dashboard
+ * access to the dashboard and forces the shift opening flow.
  * 
  * Users with role_level ≥ 4 (Gerente, Super Admin) skip the gate.
  */
 const ShiftGate: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { profile } = useAuth();
-  const [shiftStatus, setShiftStatus] = useState<string | null>("LOADING");
-  const [activeShift, setActiveShift] = useState<any>(null);
+  const { profile, loading: authLoading } = useAuth();
+  const [shiftStatus, setShiftStatus] = useState<string>("LOADING");
 
-  // Only cashiers need to open a shift
-  const isCashier = profile && profile.role_level <= RoleLevel.CAJERO_PRINCIPAL;
+  // Wait for auth to finish loading
+  if (authLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen bg-[#0b0e11] text-white">
+        <RefreshCw className="animate-spin text-binance-yellow mb-4" size={48} />
+        <p className="text-gray-400 font-medium">Cargando perfil...</p>
+      </div>
+    );
+  }
 
+  // No profile → should not happen (AuthProvider handles this)
+  if (!profile) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen bg-[#0b0e11] text-white">
+        <p className="text-gray-400">Sin sesión activa</p>
+      </div>
+    );
+  }
+
+  // Not a cashier → skip gate
+  const isCashier = profile.role_level <= RoleLevel.CAJERO_PRINCIPAL;
+  if (!isCashier) {
+    return <>{children}</>;
+  }
+
+  // Check shift status
   useEffect(() => {
-    if (!isCashier) {
-      setShiftStatus("OPEN"); // Skip gate for non-cashiers
-      return;
-    }
-
-    // Check current shift status
     const checkShift = async () => {
       try {
-        const userId = localStorage.getItem("mock_user_id") || "user_cajero_1";
+        const userId = localStorage.getItem("mock_user_id") || profile.auth_user_id;
         const res = await fetch("/api/shifts/status", {
           headers: { "x-user-id": userId }
         });
@@ -43,57 +54,46 @@ const ShiftGate: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           const data = await res.json();
           if (data.shift && data.shift.status !== "CLOSED") {
             setShiftStatus(data.shift.status);
-            setActiveShift(data.shift);
           } else {
             setShiftStatus("CLOSED");
-            setActiveShift(null);
           }
         } else {
           setShiftStatus("CLOSED");
         }
       } catch (e) {
-        console.error("ShiftGate: error checking shift status", e);
-        setShiftStatus("CLOSED"); // Default to requiring a shift
+        console.error("ShiftGate: error checking shift", e);
+        setShiftStatus("CLOSED");
       }
     };
-
     checkShift();
-  }, [profile]);
+  }, [profile.auth_user_id]);
 
-  // Loading state while checking shift
+  // Loading shift status
   if (shiftStatus === "LOADING") {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-[#0b0e11] text-white">
         <RefreshCw className="animate-spin text-binance-yellow mb-4" size={48} />
         <p className="text-gray-400 font-medium">Verificando turno activo...</p>
         <p className="text-gray-600 text-xs mt-2">
-          {profile?.nickname} — {profile?.puesto}
+          {profile.nickname} — {profile.puesto}
         </p>
       </div>
     );
   }
 
-  // Not a cashier → skip gate entirely
-  if (!isCashier) {
-    return <>{children}</>;
-  }
-
-  // Shift already open → pass through
+  // Shift open → show dashboard
   if (shiftStatus === "OPEN") {
     return <>{children}</>;
   }
 
-  // Shift closed or pending authorization → show shift opening gate
+  // Shift closed or PENDING_AUTHORIZATION → show shift opening gate
   return (
-    <div className="min-h-screen bg-[#0b0e11] flex items-center justify-center p-4">
-      <div className="w-full max-w-5xl">
-        <ShiftOpeningCount
-          onShiftStatusChange={(status, shift) => {
-            setShiftStatus(status);
-            setActiveShift(shift);
-          }}
-        />
-      </div>
+    <div className="min-h-screen bg-[#0b0e11]">
+      <ShiftOpeningCount
+        onShiftStatusChange={(status) => {
+          setShiftStatus(status);
+        }}
+      />
     </div>
   );
 };
