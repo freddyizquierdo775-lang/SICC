@@ -3829,27 +3829,17 @@ async function startServer() {
         });
       }
 
-      const generateAuthKey = () => {
-        const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-        const digits = "0123456789";
-        let key = "";
-        for (let i = 0; i < 3; i++) {
-          key += letters.charAt(Math.floor(Math.random() * letters.length));
-        }
-        for (let i = 0; i < 6; i++) {
-          key += digits.charAt(Math.floor(Math.random() * digits.length));
-        }
-        return key;
-      };
-      const authKey = generateAuthKey();
-
       db.prepare(`
         UPDATE caja_dotaciones 
-        SET gerente_id = ?, clave_autorizacion = ?
+        SET gerente_id = ?
         WHERE id = ? AND estatus = 'PENDIENTE'
-      `).run(gerente_id, authKey, dotationId);
+      `).run(gerente_id, dotationId);
 
       const dot = db.prepare('SELECT * FROM caja_dotaciones WHERE id = ?').get(dotationId) as any;
+
+      if (!dot) {
+        return res.status(404).json({ status: "error", message: "Dotación no encontrada o ya fue aplicada." });
+      }
 
       res.json({ 
         status: "success", 
