@@ -87,12 +87,21 @@ const ShiftGate: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   }
 
   // Shift closed or PENDING_AUTHORIZATION → show shift opening gate
+  if (shiftStatus === "PENDING_AUTHORIZATION") {
+    return (
+      <div className="min-h-screen bg-[#0b0e11]">
+        <ShiftOpeningCount
+          onShiftStatusChange={(status) => setShiftStatus(status || "CLOSED")}
+        />
+      </div>
+    );
+  }
+
+  // Default: CLOSED or null → show shift opening gate
   return (
     <div className="min-h-screen bg-[#0b0e11]">
       <ShiftOpeningCount
-        onShiftStatusChange={(status) => {
-          setShiftStatus(status);
-        }}
+        onShiftStatusChange={(status) => setShiftStatus(status || "CLOSED")}
       />
     </div>
   );

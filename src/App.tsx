@@ -33,9 +33,9 @@ export default function App() {
 
   return (
     <AuthProvider>
-      {/* TEMP: bypass ShiftGate to isolate blank screen issue */}
-      <DashboardLayout activeTab={activeTab} setActiveTab={setActiveTab}>
-        {activeTab === "dashboard" && <Dashboard />}
+      <ShiftGate>
+        <DashboardLayout activeTab={activeTab} setActiveTab={setActiveTab}>
+          {activeTab === "dashboard" && <Dashboard />}
         
         {activeTab === "baas" && (
           <AuthGuard minLevel={RoleLevel.CAJERO_PRINCIPAL}>
@@ -91,7 +91,7 @@ export default function App() {
           </AuthGuard>
         )}
       </DashboardLayout>
-      {/* </ShiftGate> */}
+      </ShiftGate>
     </AuthProvider>
   );
 }
