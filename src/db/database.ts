@@ -456,6 +456,23 @@ function runMigrationsAndSetup() {
     CREATE UNIQUE INDEX IF NOT EXISTS idx_sucursales_matriz_unica ON sucursales(es_matriz) WHERE es_matriz = 1;
   `);
 
+  // Migration: Add password_hash column if it doesn't exist
+  try {
+    db.prepare("ALTER TABLE User_Profiles ADD COLUMN password_hash TEXT").run();
+    console.log("[Migration] Added password_hash to User_Profiles");
+  } catch (e) {
+    // Column already exists
+  }
+
+  // Set default password for existing mock users (password: "123456")
+  try {
+    const crypto = require('crypto');
+    const defaultHash = crypto.createHash('sha256').update('123456').digest('hex');
+    db.prepare("UPDATE User_Profiles SET password_hash = ? WHERE password_hash IS NULL").run(defaultHash);
+  } catch (e) {
+    // skip if crypto fails
+  }
+
   // Migration: Add es_matriz column if it doesn't exist
   try {
     db.prepare("ALTER TABLE sucursales ADD COLUMN es_matriz INTEGER DEFAULT 0").run();

@@ -26,7 +26,7 @@ interface DashboardLayoutProps {
 
 export default function DashboardLayout({ children, activeTab, setActiveTab }: DashboardLayoutProps) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const { profile, hasPermission, switchUser } = useAuth();
+  const { profile, hasPermission, switchUser, logout } = useAuth();
 
   const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
 
@@ -134,7 +134,7 @@ export default function DashboardLayout({ children, activeTab, setActiveTab }: D
         </nav>
 
         <div className="p-4 border-t border-[#2b3139]">
-          <button className="flex items-center gap-3 text-gray-400 hover:text-white transition-colors w-full p-2 rounded-lg hover:bg-[#2b3139]">
+          <button onClick={logout} className="flex items-center gap-3 text-gray-400 hover:text-white transition-colors w-full p-2 rounded-lg hover:bg-[#2b3139] cursor-pointer">
             <LogOut size={20} />
             <span className="font-medium">Cerrar Sesión</span>
           </button>

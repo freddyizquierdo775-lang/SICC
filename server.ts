@@ -569,6 +569,39 @@ async function startServer() {
     }
   });
 
+  app.post('/api/auth/login', (req, res) => {
+    const { auth_user_id, password } = req.body;
+    if (!auth_user_id || !password) {
+      return res.status(400).json({ status: "error", message: "Usuario y contraseña requeridos." });
+    }
+    try {
+      const crypto = require('crypto');
+      const hash = crypto.createHash('sha256').update(password).digest('hex');
+      
+      const profile = db.prepare(
+        'SELECT * FROM User_Profiles WHERE auth_user_id = ? AND password_hash = ? AND is_active = 1'
+      ).get(auth_user_id, hash) as any;
+      
+      if (!profile) {
+        return res.status(401).json({ status: "error", message: "Credenciales inválidas." });
+      }
+
+      // Update last_login
+      db.prepare('UPDATE User_Profiles SET last_login = CURRENT_TIMESTAMP WHERE auth_user_id = ?').run(auth_user_id);
+
+      // Parse permissions
+      profile.custom_permissions = JSON.parse(profile.custom_permissions || '{}');
+
+      res.json({ 
+        status: "success", 
+        message: "Inicio de sesión exitoso.",
+        data: profile
+      });
+    } catch (error) {
+      res.status(500).json({ error: (error as Error).message });
+    }
+  });
+
   app.post('/api/auth/users', (req, res) => {
     const { nickname, puesto, branch_id, hire_date, role_level } = req.body;
     try {
@@ -1660,17 +1693,22 @@ async function startServer() {
         show_vault_balance: false
       });
 
-      // Insert operator into User_Profiles
+      // Insert operator into User_Profiles with auto-generated password
+      const tempPassword = curp.substring(0, 4).toUpperCase() + '2026';
+      const crypto = require('crypto');
+      const passwordHash = crypto.createHash('sha256').update(tempPassword).digest('hex');
+
       db.prepare(`
-        INSERT INTO User_Profiles (auth_user_id, nickname, puesto, branch_id, hire_date, role_level, custom_permissions)
-        VALUES (?, ?, ?, ?, ?, 2, ?)
+        INSERT INTO User_Profiles (auth_user_id, nickname, puesto, branch_id, hire_date, role_level, custom_permissions, password_hash)
+        VALUES (?, ?, ?, ?, ?, 2, ?, ?)
       `).run(
         authUserId,
         fileRecord.full_name,
         fileRecord.puesto,
         fileRecord.sucursal || 'MAIN_BRANCH',
         metadata.fecha_inicio || new Date().toISOString().split('T')[0],
-        defaultPermissions
+        defaultPermissions,
+        passwordHash
       );
 
       // Update HR Vault record to set finalized status
@@ -1678,9 +1716,10 @@ async function startServer() {
 
       res.json({
         success: true,
-        message: 'Alta definitiva consolidada. El usuario ha sido registrado en el sistema con credenciales activas.',
+        message: 'Alta definitiva consolidada.',
         auth_user_id: authUserId,
-        nickname: fileRecord.full_name
+        nickname: fileRecord.full_name,
+        temp_password: tempPassword
       });
     } catch (error) {
       res.status(500).json({ error: (error as Error).message });
