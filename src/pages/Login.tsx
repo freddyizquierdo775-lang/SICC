@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { motion } from 'motion/react';
 import { Shield, Fingerprint, Lock, User, AlertCircle, LogIn } from 'lucide-react';
 
 export default function Login() {
@@ -43,10 +42,7 @@ export default function Login() {
 
   return (
     <div className="min-h-screen bg-[#0b0e11] flex items-center justify-center p-4">
-      <motion.div 
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4 }}
+      <div 
         className="w-full max-w-md"
       >
         {/* Logo */}
@@ -131,7 +127,7 @@ export default function Login() {
             </p>
           </div>
         </div>
-      </motion.div>
+      </div>
     </div>
   );
 }
