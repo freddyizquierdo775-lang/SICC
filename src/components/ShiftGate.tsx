@@ -8,27 +8,21 @@ const ShiftGate: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { profile, loading: authLoading } = useAuth();
   const [shiftStatus, setShiftStatus] = useState<string>("LOADING");
 
-  // Wait for auth to load
-  if (authLoading) {
+  // Wait for auth
+  if (authLoading || !profile) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-[#0b0e11] text-white">
         <RefreshCw className="animate-spin text-binance-yellow mb-4" size={48} />
-        <p className="text-gray-400 font-medium">Cargando perfil...</p>
-      </div>
-    );
-  }
-
-  if (!profile) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-[#0b0e11] text-white">
-        <p className="text-gray-400">Sin sesión activa</p>
+        <p className="text-gray-400 font-medium">
+          {authLoading ? "Cargando perfil..." : "Sin sesión activa"}
+        </p>
       </div>
     );
   }
 
   const isCashier = profile.role_level <= RoleLevel.CAJERO_PRINCIPAL;
 
-  // Check shift status
+  // Check shift status (only for cashiers)
   useEffect(() => {
     if (!isCashier) return;
     let cancelled = false;
@@ -53,40 +47,36 @@ const ShiftGate: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     return () => { cancelled = true; };
   }, [profile.auth_user_id, isCashier]);
 
-  // Non-cashiers or open shift: just show dashboard
-  const showDashboard = !isCashier || shiftStatus === "OPEN";
-  const showGate = isCashier && (shiftStatus === "CLOSED" || shiftStatus === "PENDING_AUTHORIZATION");
-  const showLoading = shiftStatus === "LOADING" && isCashier;
+  // Non-cashiers: just show dashboard
+  if (!isCashier) {
+    return <div key="admin-wrapper">{children}</div>;
+  }
 
-  return (
-    <>
-      {/* Dashboard always mounted, hidden when gate is active */}
-      <div style={{ display: showDashboard ? "block" : "none", minHeight: "100vh" }}>
-        {children}
+  // Loading shift status
+  if (shiftStatus === "LOADING") {
+    return (
+      <div key="loading" className="flex flex-col items-center justify-center min-h-screen bg-[#0b0e11] text-white">
+        <RefreshCw className="animate-spin text-binance-yellow mb-4" size={48} />
+        <p className="text-gray-400 font-medium">Verificando turno activo...</p>
+        <p className="text-gray-600 text-xs mt-2">{profile.nickname} — {profile.puesto}</p>
       </div>
+    );
+  }
 
-      {/* Loading overlay */}
-      {showLoading && (
-        <div className="fixed inset-0 z-50 bg-[#0b0e11] flex flex-col items-center justify-center">
-          <RefreshCw className="animate-spin text-binance-yellow mb-4" size={48} />
-          <p className="text-gray-400 font-medium">Verificando turno activo...</p>
-          <p className="text-gray-600 text-xs mt-2">{profile.nickname} — {profile.puesto}</p>
-        </div>
-      )}
+  // Shift open → dashboard
+  if (shiftStatus === "OPEN") {
+    return <div key="dashboard-wrapper">{children}</div>;
+  }
 
-      {/* Shift opening gate overlay */}
-      {showGate && (
-        <div className="fixed inset-0 z-50 bg-[#0b0e11] overflow-auto">
-          <div className="min-h-screen flex items-center justify-center p-4">
-            <div className="w-full max-w-5xl">
-              <ShiftOpeningCount
-                onShiftStatusChange={(status) => setShiftStatus(status || "CLOSED")}
-              />
-            </div>
-          </div>
-        </div>
-      )}
-    </>
+  // CLOSED or PENDING_AUTHORIZATION → shift gate
+  return (
+    <div key="gate" className="min-h-screen bg-[#0b0e11] flex items-center justify-center p-4">
+      <div className="w-full max-w-5xl">
+        <ShiftOpeningCount
+          onShiftStatusChange={(status) => setShiftStatus(status || "CLOSED")}
+        />
+      </div>
+    </div>
   );
 };
 

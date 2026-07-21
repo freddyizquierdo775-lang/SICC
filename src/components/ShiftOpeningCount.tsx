@@ -149,10 +149,7 @@ export default function ShiftOpeningCount({ onShiftStatusChange }: ShiftOpeningC
         setActiveShift(data);
         setStatus(data.status);
         onShiftStatusChange(data.status, data);
-        if (data.status === "OPEN") {
-          // Success directly
-          window.location.reload();
-        }
+        // ShiftGate handles the transition — no reload needed
       } else {
         const err = await res.json();
         alert("Error al abrir turno: " + (err.error || "Error del servidor"));
@@ -186,7 +183,7 @@ export default function ShiftOpeningCount({ onShiftStatusChange }: ShiftOpeningC
         setAuthSuccess("¡Turno autorizado con éxito! Alineando saldos del libro mayor y boveda física...");
         setTimeout(() => {
           onShiftStatusChange("OPEN", { ...activeShift, status: "OPEN" });
-          window.location.reload();
+          // ShiftGate handles the transition — no reload needed
         }, 2000);
       } else {
         const err = await res.json();
