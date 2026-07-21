@@ -658,73 +658,42 @@ async function startServer() {
     const { counts } = req.body; // e.g., { MXN: { "500": 10, ... }, USD: { "100": 5 } }
     
     try {
-      // 1. Get user nickname
+      // 1. Get user profile and inherited caja balance
       const profile = db.prepare('SELECT nickname FROM User_Profiles WHERE auth_user_id = ?').get(userId) as any;
       const nickname = profile ? profile.nickname : 'Cajero';
 
-      // 2. Fetch expected denominations inventory from Inventario_Boveda_Detalle
-      const expectedDbItems = db.prepare('SELECT currency, denominacion, quantity FROM Inventario_Boveda_Detalle WHERE branch_id = \'MAIN_BRANCH\'').all() as any[];
-      
-      // Build a structured map of expected denominations
-      const expectedMap: Record<string, Record<string, number>> = {};
-      const expectedTotals: Record<string, number> = {};
-      
-      expectedDbItems.forEach(item => {
-        const curr = item.currency;
-        const denom = String(item.denominacion);
-        const qty = item.quantity || 0;
-        
-        if (!expectedMap[curr]) {
-          expectedMap[curr] = {};
-          expectedTotals[curr] = 0;
-        }
-        expectedMap[curr][denom] = qty;
-        expectedTotals[curr] += (item.denominacion * qty);
-      });
+      const caja = db.prepare('SELECT saldo_actual_mxn FROM cajas WHERE cajero_id = ?').get(userId) as any;
+      const inheritedBalance = caja ? (caja.saldo_actual_mxn || 0) : 0;
 
-      // 3. Process the user's declared physical counts and calculate totals
+      // 2. Calculate declared total from blind count (MXN only for now)
       const declaredMap: Record<string, Record<string, number>> = counts || {};
-      const declaredTotals: Record<string, number> = {};
-      const deviations: Record<string, { declared: number, expected: number, diff: number, valueDiff: number }> = {};
+      let declaredTotalMXN = 0;
       
-      let hasDeviation = false;
-
-      // We support MXN, USD, EUR, etc. Let's inspect all currencies we have in expected or declared
-      const allCurrencies = Array.from(new Set([...Object.keys(expectedMap), ...Object.keys(declaredMap)]));
-      
-      allCurrencies.forEach(curr => {
-        declaredTotals[curr] = 0;
-        const currDecMap = declaredMap[curr] || {};
-        
-        // Sum total declared value
-        Object.keys(currDecMap).forEach(denom => {
-          const qty = Number(currDecMap[denom] || 0);
-          declaredTotals[curr] += (Number(denom) * qty);
+      Object.keys(declaredMap).forEach(curr => {
+        const currCounts = declaredMap[curr] || {};
+        Object.keys(currCounts).forEach(denom => {
+          declaredTotalMXN += (Number(denom) * Number(currCounts[denom] || 0));
         });
-
-        const expectedTotal = expectedTotals[curr] || 0;
-        const declaredTotal = declaredTotals[curr] || 0;
-        const diff = declaredTotal - expectedTotal;
-
-        // If there's a difference, flag it! We use a threshold of 0.01 to avoid float inaccuracies
-        if (Math.abs(diff) > 0.01) {
-          hasDeviation = true;
-        }
-
-        // Get currency rate to pivot to MXN for the ledger
-        const ratePair = `${curr}_MXN`;
-        const buyRate = redisRates[ratePair as keyof typeof redisRates]?.buy || 1.0;
-        const valueDiff = diff * buyRate;
-
-        deviations[curr] = {
-          declared: declaredTotal,
-          expected: expectedTotal,
-          diff: diff,
-          valueDiff: valueDiff
-        };
       });
 
-      // 4. Generate folio document: FOLIO-AP-YYYYMMDD-Random
+      // 3. Compare declared vs inherited balance
+      const diff = declaredTotalMXN - inheritedBalance;
+      const hasDeviation = Math.abs(diff) > 0.01;
+
+      // Build expected map from inherited balance (simplified as single MXN total)
+      const expectedMap: Record<string, Record<string, number>> = {
+        MXN: { [String(inheritedBalance)]: 1 }
+      };
+      
+      const deviations: Record<string, any> = {};
+      deviations['MXN'] = {
+        declared: declaredTotalMXN,
+        expected: inheritedBalance,
+        diff: diff,
+        valueDiff: diff
+      };
+
+      // 4. Generate folio document
       const dateStr = new Date().toISOString().slice(0,10).replace(/-/g, '');
       const randHex = Math.floor(1000 + Math.random() * 9000);
       const folio = `FOLIO-AP-${dateStr}-${randHex}`;
@@ -754,7 +723,9 @@ async function startServer() {
         status,
         folio_documento: folio,
         hasDeviation,
-        deviations
+        deviations,
+        inherited_balance: inheritedBalance,
+        declared_total: declaredTotalMXN
       });
     } catch (error) {
       res.status(500).json({ error: (error as Error).message });
