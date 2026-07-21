@@ -29,6 +29,7 @@ interface CapitalHumanoWorkspaceProps {
   handleFinalizeOnboarding: () => Promise<void>;
   isFinalizing: boolean;
   finalSuccess: boolean;
+  credentialsCreated: { auth_user_id: string; temp_password: string } | null;
   validateStep: (step: number) => boolean;
 
   // Branch state & operations
@@ -67,6 +68,7 @@ export default function CapitalHumanoWorkspace({
   handleFinalizeOnboarding,
   isFinalizing,
   finalSuccess,
+  credentialsCreated,
   validateStep,
   branches,
   selectedBranchId,
@@ -86,6 +88,7 @@ export default function CapitalHumanoWorkspace({
 }: CapitalHumanoWorkspaceProps) {
   // Navigation / Modal control state
   const [activeModal, setActiveModal] = useState<'pre-contratacion' | 'monitor-onboarding' | 'expediente-digital' | 'asignacion-operativa' | 'tipos-de-cambio' | 'alta-sucursal' | 'umbrales-seguridad' | null>(null);
+  const [newCredentials, setNewCredentials] = useState<{auth_user_id: string; temp_password: string} | null>(null);
   
   // Security Threshold State
   const [thresholds, setThresholds] = useState<any[]>([]);
@@ -308,7 +311,13 @@ export default function CapitalHumanoWorkspace({
 
       const resData = await response.json();
       if (response.ok) {
-        // Success: Refresh records & close modal
+        // Success: Save credentials & refresh
+        if (resData.auth_user_id && resData.temp_password) {
+          setNewCredentials({
+            auth_user_id: resData.auth_user_id,
+            temp_password: resData.temp_password
+          });
+        }
         await fetchVaultRecords();
         setActiveModal(null);
         setSelectedCandidateCurp('');
@@ -327,6 +336,60 @@ export default function CapitalHumanoWorkspace({
 
   return (
     <div className="space-y-8 w-full">
+      {/* CREDENTIALS SUCCESS OVERLAY — shown after onboarding finalization */}
+      {newCredentials && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-[#0d1117] border-2 border-emerald-500/40 rounded-2xl p-8 max-w-md w-full shadow-2xl shadow-emerald-500/10"
+          >
+            <div className="text-center space-y-5">
+              <div className="mx-auto w-14 h-14 bg-emerald-500/10 border border-emerald-500/30 rounded-2xl flex items-center justify-center">
+                <CheckCircle2 size={32} className="text-emerald-400" />
+              </div>
+              <div>
+                <h3 className="text-lg font-black text-white">Alta Consolidada</h3>
+                <p className="text-xs text-gray-400 mt-1">
+                  El operador ha sido registrado en el sistema. Comparta estas credenciales de forma segura.
+                </p>
+              </div>
+
+              <div className="bg-[#161b22] border border-[#21262d] rounded-xl p-4 space-y-3 text-left">
+                <div>
+                  <span className="text-[9px] font-bold text-gray-500 uppercase tracking-wider">Usuario</span>
+                  <div className="flex items-center gap-2 mt-1 bg-black/40 rounded-lg px-3 py-2 border border-[#21262d]">
+                    <User size={14} className="text-blue-400 shrink-0" />
+                    <code className="text-sm text-white font-mono break-all select-all">{newCredentials.auth_user_id}</code>
+                  </div>
+                </div>
+                <div>
+                  <span className="text-[9px] font-bold text-gray-500 uppercase tracking-wider">Contraseña Temporal</span>
+                  <div className="flex items-center gap-2 mt-1 bg-black/40 rounded-lg px-3 py-2 border border-[#21262d]">
+                    <Lock size={14} className="text-yellow-400 shrink-0" />
+                    <code className="text-sm text-white font-mono select-all">{newCredentials.temp_password}</code>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-xl">
+                <p className="text-[10px] text-yellow-400 flex items-start gap-2">
+                  <AlertCircle size={14} className="shrink-0 mt-0.5" />
+                  <span>El operador deberá cambiar su contraseña en el primer inicio de sesión. Estas credenciales <strong>no se mostrarán de nuevo</strong>.</span>
+                </p>
+              </div>
+
+              <button
+                onClick={() => setNewCredentials(null)}
+                className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs transition-colors"
+              >
+                Entendido — Cerrar
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
       {!isAuthorized && (
         <div className="p-4 bg-yellow-500/10 border border-yellow-500/30 text-yellow-400 text-xs rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 text-left">
           <div className="flex items-center gap-2">

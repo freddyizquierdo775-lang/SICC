@@ -534,12 +534,12 @@ function runMigrationsAndSetup() {
   });
 
   const upsertUser = db.prepare(`
-    INSERT OR REPLACE INTO User_Profiles (auth_user_id, nickname, puesto, role_level, branch_id, custom_permissions)
-    VALUES (?, ?, ?, ?, ?, ?)
+    INSERT OR REPLACE INTO User_Profiles (auth_user_id, nickname, puesto, role_level, branch_id, custom_permissions, password_hash)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
   `);
 
-  upsertUser.run('user_cajero_1', 'FREDDY', 'Super Administrador', 5, 'MAIN_BRANCH', adminPermissions);
-  upsertUser.run('user_gerente_1', 'ADMIN_MASTER', 'Gerente de Sucursal', 5, 'MAIN_BRANCH', adminPermissions);
+  upsertUser.run('user_cajero_1', 'FREDDY', 'Super Administrador', 5, 'MAIN_BRANCH', adminPermissions, defaultHash);
+  upsertUser.run('user_gerente_1', 'ADMIN_MASTER', 'Gerente de Sucursal', 5, 'MAIN_BRANCH', adminPermissions, defaultHash);
 
   // Migration for hire_date
   try {

@@ -256,6 +256,7 @@ export default function Settings() {
   const [generationResponse, setGenerationResponse] = useState<any>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [finalSuccess, setFinalSuccess] = useState(false);
+  const [credentialsCreated, setCredentialsCreated] = useState<{auth_user_id: string, temp_password: string} | null>(null);
 
   const [wizardData, setWizardData] = useState({
     // Paso 1: Datos de Identidad
@@ -415,6 +416,10 @@ export default function Settings() {
       const resData = await response.json();
       if (response.ok) {
         setFinalSuccess(true);
+        setCredentialsCreated({
+          auth_user_id: resData.auth_user_id,
+          temp_password: resData.temp_password
+        });
         fetchVaultRecords();
         setTimeout(() => {
           setFinalSuccess(false);
@@ -512,6 +517,7 @@ export default function Settings() {
         handleFinalizeOnboarding={handleFinalizeOnboarding}
         isFinalizing={isFinalizing}
         finalSuccess={finalSuccess}
+        credentialsCreated={credentialsCreated}
         validateStep={validateStep}
         branches={branches}
         selectedBranchId={selectedBranchId}
