@@ -7,6 +7,52 @@ import fs from "fs";
 import clearingRoutes from "./src/microservices/clearing-house/routes/clearing.ts";
 import db from "./src/db/database.ts";
 
+// 🩹 MIGRATION: Fix the trigger that was created with wrong column name 'created_at' instead of 'date'
+try {
+  db.exec(`DROP TRIGGER IF EXISTS tr_caja_dotaciones_aplicar`);
+  db.exec(`
+    CREATE TRIGGER tr_caja_dotaciones_aplicar
+    AFTER UPDATE OF estatus ON caja_dotaciones
+    WHEN NEW.estatus = 'APLICADO' AND OLD.estatus = 'PENDIENTE'
+    BEGIN
+      -- Incrementar el saldo_actual_mxn en cajas
+      INSERT INTO cajas (cajero_id, saldo_actual_mxn, last_update)
+      VALUES (NEW.cajero_id, NEW.monto_mxn, CURRENT_TIMESTAMP)
+      ON CONFLICT(cajero_id) DO UPDATE SET
+        saldo_actual_mxn = saldo_actual_mxn + NEW.monto_mxn,
+        last_update = CURRENT_TIMESTAMP;
+
+      -- Generar asientos en Accounting_Journal
+      INSERT INTO Accounting_Journal (transaction_id, account_code, description, debit, credit, date)
+      VALUES (
+        'DOT-' || NEW.id,
+        '1001',
+        'CARGO por dotacion ' || NEW.tipo_dotacion || ' - Ref: ' || NEW.id,
+        NEW.monto_mxn,
+        0,
+        CURRENT_TIMESTAMP
+      );
+
+      INSERT INTO Accounting_Journal (transaction_id, account_code, description, debit, credit, date)
+      VALUES (
+        'DOT-' || NEW.id,
+        '1000',
+        'ABONO por dotacion ' || NEW.tipo_dotacion || ' - Ref: ' || NEW.id,
+        0,
+        NEW.monto_mxn,
+        CURRENT_TIMESTAMP
+      );
+
+      -- Actualizar balances de cuentas
+      UPDATE Accounting_Accounts SET balance = balance + NEW.monto_mxn WHERE account_code = '1001';
+      UPDATE Accounting_Accounts SET balance = balance - NEW.monto_mxn WHERE account_code = '1000';
+    END;
+  `);
+  console.log("[Migration] Applied: Fixed trigger tr_caja_dotaciones_aplicar (created_at → date)");
+} catch (e) {
+  console.error("[Migration] Failed to fix trigger:", e);
+}
+
 // Ensure uploads directory exists
 const uploadDir = path.join(process.cwd(), "uploads");
 if (!fs.existsSync(uploadDir)) {
@@ -3833,7 +3879,10 @@ async function startServer() {
         return res.status(400).json({ status: "error", message: "Esta dotación ya ha sido aplicada anteriormente." });
       }
 
-      // Update status to APLICADO. This fires the database SQL trigger automatically to update ledger balances and total cash!
+      // Update status to APLICADO. The DB trigger tr_caja_dotaciones_aplicar will handle:
+      //   - Updating cajas.saldo_actual_mxn
+      //   - Creating Accounting_Journal entries
+      //   - Updating Accounting_Accounts balances
       db.prepare(`UPDATE caja_dotaciones SET estatus = 'APLICADO' WHERE id = ?`).run(dot.id);
 
       // Also physically increase inventory in the branch (from vault)
@@ -3875,13 +3924,6 @@ async function startServer() {
               stmtInsert.run(dot.cajero_id, denom, quantity);
             }
           });
-
-          // Append breakdown detail to the ledger's Journal Entry description
-          db.prepare(`
-            UPDATE Accounting_Journal 
-            SET description = description || ' | Desglose: ' || ?
-            WHERE transaction_id = ?
-          `).run(dot.desglose_json, 'DOT-' + dot.id);
 
           console.log(`[Caja Detalle] Successfully saved breakdown for cashier ${dot.cajero_id}`);
         } catch (jsonErr) {
@@ -3931,6 +3973,7 @@ async function startServer() {
         return res.status(400).json({ status: "error", message: "Esta dotación ya ha sido aplicada." });
       }
 
+      // Update status to APLICADO. The DB trigger tr_caja_dotaciones_aplicar handles the rest.
       db.prepare(`UPDATE caja_dotaciones SET estatus = 'APLICADO', gerente_id = ? WHERE id = ?`).run(gerente_id, dotationId);
 
       // Increase physical stock in Inventario_Boveda_Detalle

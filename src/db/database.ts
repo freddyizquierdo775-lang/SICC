@@ -734,7 +734,7 @@ function runMigrationsAndSetup() {
           last_update = CURRENT_TIMESTAMP;
 
         -- Generar asientos en Accounting_Journal (1001: Cuenta operativa cajero, 1000: Cuenta resguardo)
-        INSERT INTO Accounting_Journal (transaction_id, account_code, description, debit, credit, created_at)
+        INSERT INTO Accounting_Journal (transaction_id, account_code, description, debit, credit, date)
         VALUES (
           'DOT-' || NEW.id,
           '1001',
@@ -744,7 +744,7 @@ function runMigrationsAndSetup() {
           CURRENT_TIMESTAMP
         );
 
-        INSERT INTO Accounting_Journal (transaction_id, account_code, description, debit, credit, created_at)
+        INSERT INTO Accounting_Journal (transaction_id, account_code, description, debit, credit, date)
         VALUES (
           'DOT-' || NEW.id,
           '1000',

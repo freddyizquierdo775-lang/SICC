@@ -111,6 +111,12 @@ export default function LiquidityHub() {
   const [remoteAuthScanning, setRemoteAuthScanning] = useState(false);
   const [scanProgress, setScanProgress] = useState(0);
 
+  // Estado para autorizar dotaciones pendientes desde el log
+  const [authorizingDotId, setAuthorizingDotId] = useState<string | null>(null);
+  const [authScanning, setAuthScanning] = useState(false);
+  const [authScanProgress, setAuthScanProgress] = useState(0);
+  const [authResult, setAuthResult] = useState<{ dotationId: string; clave: string; monto: number } | null>(null);
+
   // New Withdrawal states
   const [showWithdrawalModal, setShowWithdrawalModal] = useState(false);
   const [withdrawalAmount, setWithdrawalAmount] = useState("");
@@ -324,6 +330,57 @@ export default function LiquidityHub() {
       setErrorMessage("Error de red al registrar dotación.");
     } finally {
       setRemoteAuthScanning(false);
+    }
+  };
+
+  // Autorizar una dotación pendiente solicitada por un cajero
+  const handleAuthorizeDotation = async (dotationId: string) => {
+    setAuthorizingDotId(dotationId);
+    setAuthScanning(true);
+    setAuthScanProgress(0);
+
+    // Simular escaneo biométrico progresivo
+    const scanInterval = setInterval(() => {
+      setAuthScanProgress(prev => {
+        if (prev >= 100) {
+          clearInterval(scanInterval);
+          return 100;
+        }
+        return prev + 20;
+      });
+    }, 200);
+
+    try {
+      const res = await fetch("/api/liquidity/dotaciones/autorizar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          dotationId,
+          gerente_id: profile?.auth_user_id || "user_gerente_1",
+        }),
+      });
+      const json = await res.json();
+      clearInterval(scanInterval);
+      setAuthScanProgress(100);
+
+      if (json.status === "success") {
+        const clave = json.data?.clave_autorizacion;
+        setAuthResult({
+          dotationId,
+          clave: clave || "ERROR",
+          monto: json.data?.monto_mxn || 0,
+        });
+        handleManualRefresh();
+      } else {
+        setErrorMessage(json.message || "Error al autorizar dotación.");
+        setAuthorizingDotId(null);
+      }
+    } catch (err) {
+      clearInterval(scanInterval);
+      setErrorMessage("Error de red al autorizar dotación.");
+      setAuthorizingDotId(null);
+    } finally {
+      setAuthScanning(false);
     }
   };
 
@@ -939,6 +996,59 @@ export default function LiquidityHub() {
           </div>
         </div>
 
+        {/* SOLICITUDES PENDIENTES DE DOTACIÓN */}
+        {data?.dotaciones?.filter((d: any) => d.tipo_dotacion === 'EMERGENCIA' && d.estatus === 'PENDIENTE').length > 0 && (
+          <div className="lg:col-span-5 bg-[#0d1117] border border-[#f59e0b]/30 rounded-2xl p-6 shadow-xl">
+            <h2 className="text-lg font-bold flex items-center gap-2 text-[#f59e0b] mb-1">
+              <AlertTriangle size={20} />
+              Solicitudes de Dotación Pendientes
+            </h2>
+            <p className="text-xs text-gray-400 mb-4">Los siguientes cajeros han solicitado dotaciones de emergencia. Autorice para generar la clave de desbloqueo.</p>
+            <div className="space-y-3 max-h-[300px] overflow-y-auto pr-1">
+              {data.dotaciones
+                .filter((d: any) => d.tipo_dotacion === 'EMERGENCIA' && d.estatus === 'PENDIENTE')
+                .map((dot: any) => (
+                  <div key={dot.id} className="bg-[#161b22] border border-[#f59e0b]/20 p-3 rounded-xl space-y-2 text-xs">
+                    <div className="flex items-center justify-between">
+                      <span className="px-2 py-0.5 text-[9px] font-extrabold rounded uppercase border bg-red-500/10 text-red-400 border-red-500/20">
+                        EMERGENCIA
+                      </span>
+                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded uppercase bg-yellow-500/10 text-yellow-500 animate-pulse">
+                        {dot.estatus}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center text-white font-bold">
+                      <span>Cajero: {dot.cajero_name || dot.cajero_id}</span>
+                      <span className="font-mono text-emerald-400">
+                        +${Math.abs(dot.monto_mxn).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                    <div className="text-[10px] text-gray-400 font-mono">
+                      {new Date(dot.created_at).toLocaleString()}
+                    </div>
+                    <div className="border-t border-[#21262d] pt-2 mt-1 flex justify-end">
+                      {authorizingDotId === dot.id ? (
+                        <div className="flex items-center gap-2 text-blue-400">
+                          <span className="animate-pulse">Autorizando con biometría...</span>
+                          <div className="w-20 h-1.5 bg-[#161b22] rounded-full overflow-hidden">
+                            <div className="h-full bg-blue-500 transition-all duration-150" style={{ width: `${authScanProgress}%` }} />
+                          </div>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => handleAuthorizeDotation(dot.id)}
+                          className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[10px] font-bold flex items-center gap-1.5 cursor-pointer transition-all"
+                        >
+                          <Fingerprint size={12} /> Autorizar con Biométrica
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+            </div>
+          </div>
+        )}
+
         {/* LOGS DE AUDITORÍA E COMPROBANTES */}
         <div id="card-dotaciones-log" className="lg:col-span-5 bg-[#0d1117] border border-[#21262d] rounded-2xl p-6 shadow-xl flex flex-col justify-between">
           <div>
@@ -997,7 +1107,24 @@ export default function LiquidityHub() {
                         <div className="text-gray-500">{new Date(dot.created_at).toLocaleString()}</div>
                       </div>
 
-                      <div className="border-t border-[#21262d] pt-2 mt-1 flex justify-end">
+                      <div className="border-t border-[#21262d] pt-2 mt-1 flex justify-end gap-2">
+                        {dot.estatus === "PENDIENTE" && !dot.gerente_id ? (
+                          authorizingDotId === dot.id ? (
+                            <div className="flex items-center gap-2 text-blue-400">
+                              <span className="animate-pulse text-[10px]">Autorizando con biometría...</span>
+                              <div className="w-20 h-1.5 bg-[#161b22] rounded-full overflow-hidden">
+                                <div className="h-full bg-blue-500 transition-all duration-150" style={{ width: `${authScanProgress}%` }} />
+                              </div>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => handleAuthorizeDotation(dot.id)}
+                              className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[10px] font-bold flex items-center gap-1.5 cursor-pointer transition-all"
+                            >
+                              <Fingerprint size={12} /> Autorizar con Biométrica
+                            </button>
+                          )
+                        ) : null}
                         <button
                           onClick={() => {
                             setShowReceiptModal(dot);
@@ -1705,6 +1832,58 @@ export default function LiquidityHub() {
                 </button>
               </div>
 
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* MODAL: RESULTADO DE AUTORIZACIÓN (Clave generada) */}
+      <AnimatePresence>
+        {authResult && (
+          <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setAuthResult(null)}
+              className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 15 }}
+              className="relative w-full max-w-md bg-[#0d1117] rounded-2xl border border-emerald-500/30 overflow-hidden shadow-2xl z-10"
+            >
+              <div className="p-6 text-center space-y-4">
+                <div className="w-16 h-16 mx-auto bg-emerald-500/10 rounded-full flex items-center justify-center">
+                  <ShieldCheck size={32} className="text-emerald-400" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-white">¡Dotación Autorizada!</h3>
+                  <p className="text-xs text-gray-400 mt-1">
+                    Se generó la clave de desbloqueo para ${authResult.monto.toLocaleString()} MXN
+                  </p>
+                </div>
+                <div className="bg-[#161b22] border border-[#21262d] rounded-xl p-4">
+                  <span className="text-[10px] text-gray-500 uppercase font-bold block mb-2">Clave de Desbloqueo</span>
+                  <span className="text-2xl font-extrabold text-emerald-400 tracking-[0.3em] font-mono select-all">
+                    {authResult.clave}
+                  </span>
+                  <p className="text-[10px] text-gray-400 mt-2">
+                    Proporcione esta clave al cajero para que la ingrese en su terminal FX Trader y libere el saldo.
+                  </p>
+                </div>
+                <button
+                  onClick={() => {
+                    navigator.clipboard?.writeText(authResult.clave);
+                    setAuthResult(null);
+                    setAuthorizingDotId(null);
+                  }}
+                  className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all cursor-pointer"
+                >
+                  Copiar Clave y Cerrar
+                </button>
+              </div>
             </motion.div>
           </div>
         )}
